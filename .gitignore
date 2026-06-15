@@ -1,0 +1,39 @@
+# Local .terraform directories
+**/.terraform/*
+**/.terragrunt-cache/*
+**/.DS_Store
+
+# State
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI config
+.terraformrc
+terraform.rc
+
+# Plans / vars / lock
+*tfplan*
+*.tfvars
+!example.tfvars
+.terraform.lock.hcl
+
+# Sensitive
+*.pem
+*.key
+.env*
+**/.env
+
+.vscode/
+.claude/
+.letta/
+thoughts/
