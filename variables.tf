@@ -32,13 +32,14 @@ variable "tracking_label_value" {
 }
 
 variable "service_account" {
-  description = "Service Account honeytokens. IAM Deny policy on actAs/impersonation; optionally a JSON key generated as bait."
+  description = "Service Account honeytokens. Optionally attach an IAM Deny policy (requires roles/iam.denyAdmin — NOT included in roles/owner; grant at org/folder level first) and/or generate a bait JSON key."
   type = object({
-    enabled      = optional(bool, false)
-    count        = optional(number, 0)
-    name_prefix  = optional(string, "")
-    generate_key = optional(bool, false)
-    display_name = optional(string, "")
+    enabled          = optional(bool, false)
+    count            = optional(number, 0)
+    name_prefix      = optional(string, "")
+    generate_key     = optional(bool, false)
+    display_name     = optional(string, "")
+    iam_deny_policy  = optional(bool, false)
   })
   default = {}
 

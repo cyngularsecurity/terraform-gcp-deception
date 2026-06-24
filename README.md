@@ -51,6 +51,22 @@ module "deception" {
     name_prefix = "legacy-api-key"
   }
 }
+
+output "tracking_label" {
+  value = module.deception.tracking_label
+}
+
+output "service_account_emails" {
+  value = module.deception.service_account_emails
+}
+
+output "gcs_bucket_names" {
+  value = module.deception.gcs_bucket_names
+}
+
+output "secret_ids" {
+  value = module.deception.secret_ids
+}
 ```
 
 ## Required GCP APIs
@@ -86,6 +102,9 @@ secretmanager.googleapis.com
 | `name_prefix` | `string` | `""` | Prefix for `account_id` (3-27 chars, `[a-z][a-z0-9-]*`) |
 | `display_name` | `string` | `""` | Human-readable name (falls back to `name_prefix-NN`) |
 | `generate_key` | `bool` | `false` | Create a bait JSON key for each SA |
+| `iam_deny_policy` | `bool` | `false` | Attach an IAM Deny policy blocking the impersonation surface — see note below |
+
+> **`iam_deny_policy` permission note:** Creating deny policies requires `iam.denypolicies.create`, which is part of `roles/iam.denyAdmin`. This role is **not** included in `roles/owner` and must be granted at the organization or folder level before setting this flag to `true`. Without it the module still plants inert SAs (no project-level role bindings means no usable permissions for non-owners), but project owners retain implicit `actAs` ability via their own role.
 
 ### `gcs_bucket` object
 
@@ -121,7 +140,7 @@ secretmanager.googleapis.com
 
 ## Identity inertness
 
-Decoy service accounts hold **zero project-level role bindings**. An IAM Deny policy (scoped per-SA via `denial_condition`) additionally blocks:
+Decoy service accounts hold **zero project-level role bindings** — GCP's default-deny means any non-owner principal that discovers the SA cannot use it. When `iam_deny_policy = true` (requires `roles/iam.denyAdmin` on the project/folder/org — see above), an IAM Deny policy is also attached that additionally blocks:
 
 - `iam.serviceAccounts.actAs`
 - `iam.serviceAccounts.getAccessToken`
