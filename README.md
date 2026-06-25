@@ -150,7 +150,3 @@ Decoy service accounts hold **zero project-level role bindings** — GCP's defau
 - `iam.serviceAccounts.getOpenIdToken`
 
 for `principalSet://goog/public:all`. This means even project owners cannot impersonate the decoy SA. Any attempt generates a Cloud Audit Log entry.
-
-## Releasing
-
-Pushes to `main` trigger `.github/workflows/publish_tf_module.yml` (auto `vX.Y.Z` tag + release). The [Terraform Registry](https://registry.terraform.io) auto-publishes new tags once the repo is connected (one-time UI step).
