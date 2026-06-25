@@ -6,7 +6,7 @@ Terraform module that plants **inert GCP decoy (honeytoken) resources** into a c
 
 - **Freely reachable, externally-unreachable** — any principal with normal project access can discover the decoys; no public internet access is possible.
 - **Inert by policy, lured by name** — IAM Deny policies block the impersonation surface on decoy SAs; GCS buckets enforce uniform access + public-access prevention; secrets carry realistic-looking fake values. Nothing usable is inside.
-- **No Cyngular reference anywhere in the environment** — all resource names, labels, and object contents use generic operational vocabulary. A regex validator rejects reserved words (`cyngular`, `deception`, `decoy`, `honeytoken`, `bait`, `trap`, `token`) from every caller-supplied name field.
+- **No Cyngular reference anywhere in the environment** — all resource names, labels, and object contents use generic operational vocabulary. A regex validator rejects reserved words (`cyngular`, `deception`, `decoy`, `honeytoken`, `bait`, `trap`, `observer`) from every caller-supplied name field.
 - **Attribution = outputs + a caller-supplied tracking label** — the platform registers the outputs to wire up detection; no out-of-band signalling happens inside the module.
 
 ## Resource kinds (v1)

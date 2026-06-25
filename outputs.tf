@@ -9,18 +9,18 @@ output "tracking_label" {
 # Service Accounts
 
 output "service_account_emails" {
-  description = "Emails of the decoy service accounts."
-  value       = [for k, sa in google_service_account.decoy : sa.email]
+  description = "Emails of the decoy service accounts, keyed by instance index."
+  value       = { for k, sa in google_service_account.decoy : k => sa.email }
 }
 
 output "service_account_ids" {
-  description = "Full resource names of the decoy service accounts (projects/{PROJECT}/serviceAccounts/{EMAIL})."
-  value       = [for k, sa in google_service_account.decoy : sa.name]
+  description = "Full resource names of the decoy service accounts, keyed by instance index."
+  value       = { for k, sa in google_service_account.decoy : k => sa.name }
 }
 
 output "service_account_key_ids" {
-  description = "Key IDs of the bait service account JSON keys (populated only when generate_key=true)."
-  value       = [for k, key in google_service_account_key.decoy : key.id]
+  description = "Key IDs of the bait service account JSON keys, keyed by instance index (generate_key=true only)."
+  value       = { for k, key in google_service_account_key.decoy : k => key.id }
 }
 
 output "service_account_key_private_keys" {
@@ -32,23 +32,23 @@ output "service_account_key_private_keys" {
 # ── GCS Buckets
 
 output "gcs_bucket_names" {
-  description = "Names of the decoy GCS buckets."
-  value       = [for k, b in google_storage_bucket.decoy : b.name]
+  description = "Names of the decoy GCS buckets, keyed by instance index (idx-region)."
+  value       = { for k, b in google_storage_bucket.decoy : k => b.name }
 }
 
 output "gcs_bucket_urls" {
-  description = "Self-links (gs:// URLs) of the decoy GCS buckets."
-  value       = [for k, b in google_storage_bucket.decoy : b.url]
+  description = "Self-links (gs:// URLs) of the decoy GCS buckets, keyed by instance index."
+  value       = { for k, b in google_storage_bucket.decoy : k => b.url }
 }
 
 # Secret Manager
 
 output "secret_ids" {
-  description = "Secret IDs of the decoy Secret Manager secrets."
-  value       = [for k, s in google_secret_manager_secret.decoy : s.secret_id]
+  description = "Secret IDs of the decoy Secret Manager secrets, keyed by instance index."
+  value       = { for k, s in google_secret_manager_secret.decoy : k => s.secret_id }
 }
 
 output "secret_names" {
-  description = "Full resource names of the decoy secrets (projects/{PROJECT}/secrets/{ID})."
-  value       = [for k, s in google_secret_manager_secret.decoy : s.name]
+  description = "Full resource names of the decoy secrets, keyed by instance index."
+  value       = { for k, s in google_secret_manager_secret.decoy : k => s.name }
 }

@@ -4,6 +4,8 @@ resource "google_service_account" "decoy" {
   project      = var.project_id
   account_id   = "${var.service_account.name_prefix}-${each.key}"
   display_name = var.service_account.display_name != "" ? var.service_account.display_name : "${var.service_account.name_prefix}-${each.key}"
+  # GCP Service Accounts do not support labels via the Terraform resource or the SA API.
+  # Labels are applied to GCS buckets and secrets; SAs are identified via service_account_emails output.
 }
 
 # Bait key — optional JSON credential file planted in the environment as lure.

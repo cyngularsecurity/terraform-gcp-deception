@@ -58,12 +58,12 @@ variable "service_account" {
     error_message = "service_account.name_prefix must be 3-27 chars, start with a letter, and contain only [a-z0-9-] (combined with the '-NN' suffix the account_id stays within GCP's 6-30 char limit)."
   }
   validation {
-    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|token)", var.service_account.name_prefix))
-    error_message = "service_account.name_prefix must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, token."
+    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.service_account.name_prefix))
+    error_message = "service_account.name_prefix must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
   validation {
-    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|token)", var.service_account.display_name))
-    error_message = "service_account.display_name must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, token."
+    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.service_account.display_name))
+    error_message = "service_account.display_name must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
 }
 
@@ -95,16 +95,16 @@ variable "gcs_bucket" {
     error_message = "gcs_bucket.name_prefix must start with a letter or number, contain only [a-z0-9._-], and be ≤30 chars."
   }
   validation {
-    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|token)", var.gcs_bucket.name_prefix))
-    error_message = "gcs_bucket.name_prefix must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, token."
+    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.gcs_bucket.name_prefix))
+    error_message = "gcs_bucket.name_prefix must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
   validation {
     condition     = length(var.gcs_bucket.decoy_objects) == length(toset([for o in var.gcs_bucket.decoy_objects : o.name]))
     error_message = "gcs_bucket.decoy_objects must have unique names."
   }
   validation {
-    condition     = alltrue([for o in var.gcs_bucket.decoy_objects : !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|token)", o.name))])
-    error_message = "gcs_bucket.decoy_objects names must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, token."
+    condition     = alltrue([for o in var.gcs_bucket.decoy_objects : !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", o.name))])
+    error_message = "gcs_bucket.decoy_objects names must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
 }
 
@@ -132,12 +132,12 @@ variable "secret" {
     error_message = "secret.name_prefix must contain only [a-zA-Z0-9_-] and be ≤252 chars (leaves room for the '-NN' suffix within Secret Manager's 255-char limit)."
   }
   validation {
-    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|token)", var.secret.name_prefix))
-    error_message = "secret.name_prefix must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, token."
+    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.secret.name_prefix))
+    error_message = "secret.name_prefix must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
   validation {
-    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|token)", var.secret.fake_value))
-    error_message = "secret.fake_value must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, token."
+    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.secret.fake_value))
+    error_message = "secret.fake_value must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
 }
 
