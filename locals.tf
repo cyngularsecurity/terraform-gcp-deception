@@ -12,7 +12,7 @@ locals {
     for pair in setproduct(
       [for i in range(var.gcs_bucket.count) : format("%02d", i + 1)],
       var.regions
-    ) : "${pair[0]}-${pair[1]}" => {
+      ) : "${pair[0]}-${pair[1]}" => {
       idx    = pair[0]
       region = pair[1]
     }
@@ -22,7 +22,7 @@ locals {
     for pair in setproduct(
       keys(local.gcs_pairs),
       range(length(var.gcs_bucket.decoy_objects))
-    ) : "${pair[0]}::${var.gcs_bucket.decoy_objects[pair[1]].name}" => {
+      ) : "${pair[0]}::${var.gcs_bucket.decoy_objects[pair[1]].name}" => {
       bucket_key = pair[0]
       obj        = var.gcs_bucket.decoy_objects[pair[1]]
     }

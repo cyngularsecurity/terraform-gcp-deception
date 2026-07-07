@@ -1,6 +1,6 @@
 # Generated when fake_value is not provided; looks like a 40-char API key.
 resource "random_password" "secret" {
-  for_each = local.secret_keys
+  for_each = var.secret.fake_value == "" ? local.secret_keys : toset([])
   length   = 40
   special  = false
 }

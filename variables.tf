@@ -11,6 +11,10 @@ variable "regions" {
     condition     = length(var.regions) > 0
     error_message = "At least one region is required."
   }
+  validation {
+    condition     = length(var.regions) == length(toset(var.regions))
+    error_message = "regions must not contain duplicates (duplicate regions break GCS fan-out keys and Secret Manager replicas)."
+  }
 }
 
 variable "tracking_label_key" {
@@ -19,6 +23,10 @@ variable "tracking_label_key" {
   validation {
     condition     = can(regex("^[a-z][a-z0-9_-]{0,62}$", var.tracking_label_key))
     error_message = "GCP label keys must be lowercase, start with a letter, ≤63 chars, [a-z0-9_-]."
+  }
+  validation {
+    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.tracking_label_key))
+    error_message = "tracking_label_key must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
 }
 
@@ -29,19 +37,33 @@ variable "tracking_label_value" {
     condition     = can(regex("^[a-z0-9_-]{0,63}$", var.tracking_label_value))
     error_message = "GCP label values must be lowercase, ≤63 chars, [a-z0-9_-]."
   }
+  validation {
+    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.tracking_label_value))
+    error_message = "tracking_label_value must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
+  }
 }
 
 variable "service_account" {
-  description = "Service Account honeytokens. Optionally attach an IAM Deny policy (requires roles/iam.denyAdmin — NOT included in roles/owner; grant at org/folder level first) and/or generate a bait JSON key."
+  description = "Service Account honeytokens. Optionally attach an IAM Deny policy scoped to the decoy SAs via an org tag (requires roles/iam.denyAdmin + roles/resourcemanager.tagUser — NOT included in roles/owner; grant at org/folder level first) and/or generate a bait JSON key."
   type = object({
-    enabled          = optional(bool, false)
-    count            = optional(number, 0)
-    name_prefix      = optional(string, "")
-    generate_key     = optional(bool, false)
-    display_name     = optional(string, "")
-    iam_deny_policy  = optional(bool, false)
+    enabled           = optional(bool, false)
+    count             = optional(number, 0)
+    name_prefix       = optional(string, "")
+    generate_key      = optional(bool, false)
+    display_name      = optional(string, "")
+    iam_deny_policy   = optional(bool, false)
+    deny_tag_key_id   = optional(string, "") # tagKeys/NUMERIC_ID — existing org tag key; required when iam_deny_policy = true
+    deny_tag_value_id = optional(string, "") # tagValues/NUMERIC_ID — existing org tag value; required when iam_deny_policy = true
   })
   default = {}
+
+  # Deny-policy conditions only support resource.matchTag()/matchTagId() — resource
+  # names are NOT valid deny conditions. Each decoy SA is bound to the supplied tag
+  # value and the deny rule matches on that tag, scoping it to decoy SAs only.
+  validation {
+    condition     = !var.service_account.iam_deny_policy || (can(regex("^tagKeys/[0-9]+$", var.service_account.deny_tag_key_id)) && can(regex("^tagValues/[0-9]+$", var.service_account.deny_tag_value_id)))
+    error_message = "When iam_deny_policy = true, deny_tag_key_id (tagKeys/NUMERIC_ID) and deny_tag_value_id (tagValues/NUMERIC_ID) must reference an existing org tag key/value. The tag's short names must not contain the reserved words either — they are visible on the SA."
+  }
 
   validation {
     condition     = !(var.service_account.enabled && var.service_account.count > 0 && var.service_account.name_prefix == "")
@@ -98,6 +120,11 @@ variable "gcs_bucket" {
     condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.gcs_bucket.name_prefix))
     error_message = "gcs_bucket.name_prefix must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
+  # GCS rejects bucket names starting with "goog" or containing "google" — catch at plan, not apply.
+  validation {
+    condition     = !can(regex("^goog", var.gcs_bucket.name_prefix)) && !can(regex("google", var.gcs_bucket.name_prefix))
+    error_message = "gcs_bucket.name_prefix must not start with 'goog' or contain 'google' (GCS bucket-name restriction)."
+  }
   validation {
     condition     = length(var.gcs_bucket.decoy_objects) == length(toset([for o in var.gcs_bucket.decoy_objects : o.name]))
     error_message = "gcs_bucket.decoy_objects must have unique names."
@@ -105,6 +132,10 @@ variable "gcs_bucket" {
   validation {
     condition     = alltrue([for o in var.gcs_bucket.decoy_objects : !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", o.name))])
     error_message = "gcs_bucket.decoy_objects names must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
+  }
+  validation {
+    condition     = alltrue([for o in var.gcs_bucket.decoy_objects : !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", o.content))])
+    error_message = "gcs_bucket.decoy_objects contents must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
 }
 
@@ -152,4 +183,26 @@ variable "lure_labels" {
     condition     = alltrue([for k, v in var.lure_labels : can(regex("^[a-z][a-z0-9_-]{0,62}$", k)) && can(regex("^[a-z0-9_-]{0,63}$", v))])
     error_message = "GCP labels must be lowercase [a-z0-9_-], ≤63 chars, keys must start with a letter."
   }
+  validation {
+    condition     = alltrue([for k, v in var.lure_labels : !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", k)) && !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", v))])
+    error_message = "lure_labels keys and values must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
+  }
+}
+
+variable "audit_logging" {
+  description = <<-EOT
+    Opt-in Data Access audit logging for the decoy resource services. GCS object
+    reads and Secret Manager AccessSecretVersion are NOT logged by GCP by default —
+    without this (or an equivalent client-side audit config) the GCS and Secret
+    Manager decoys generate no detection events when touched.
+    CAVEATS: the audit config is authoritative per (project, service) and will
+    REPLACE any existing Data Access config the client has for these services; it
+    also applies project-wide (all buckets/secrets, not only decoys), which has log
+    volume/cost implications. Leave disabled if the platform or client manages
+    Data Access logging elsewhere.
+  EOT
+  type = object({
+    enabled = optional(bool, false)
+  })
+  default = {}
 }

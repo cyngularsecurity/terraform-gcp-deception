@@ -20,7 +20,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -56,8 +56,16 @@ jobs:
           minor="${parts[1]:-0}"
           patch="${parts[2]:-0}"
 
-          # Increment patch version
-          patch=$((patch + 1))
+          # Bump level from the merge-commit message: "#major" or "#minor"
+          # markers bump those components; anything else bumps patch.
+          commit_msg=$(git log -1 --pretty=%B)
+          if echo "$commit_msg" | grep -qi '#major'; then
+            major=$((major + 1)); minor=0; patch=0
+          elif echo "$commit_msg" | grep -qi '#minor'; then
+            minor=$((minor + 1)); patch=0
+          else
+            patch=$((patch + 1))
+          fi
           new_version="v$major.$minor.$patch"
 
           # Check if the new version already exists
@@ -79,7 +87,7 @@ jobs:
 
       - name: Create GitHub release
         if: env.tag_exists == 'false'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ env.new_version }}
           name: ${{ env.new_version }}

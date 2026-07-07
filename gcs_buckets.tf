@@ -18,7 +18,9 @@ resource "google_storage_bucket" "decoy" {
 
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
-  force_destroy               = false
+  # Contents are fake by design; objects written outside Terraform (e.g. by a
+  # lured principal) must not block destroy.
+  force_destroy = true
 
   labels = local.common_labels
 }
