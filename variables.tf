@@ -188,3 +188,21 @@ variable "lure_labels" {
     error_message = "lure_labels keys and values must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
   }
 }
+
+variable "audit_logging" {
+  description = <<-EOT
+    Opt-in Data Access audit logging for the decoy resource services. GCS object
+    reads and Secret Manager AccessSecretVersion are NOT logged by GCP by default —
+    without this (or an equivalent client-side audit config) the GCS and Secret
+    Manager decoys generate no detection events when touched.
+    CAVEATS: the audit config is authoritative per (project, service) and will
+    REPLACE any existing Data Access config the client has for these services; it
+    also applies project-wide (all buckets/secrets, not only decoys), which has log
+    volume/cost implications. Leave disabled if the platform or client manages
+    Data Access logging elsewhere.
+  EOT
+  type = object({
+    enabled = optional(bool, false)
+  })
+  default = {}
+}

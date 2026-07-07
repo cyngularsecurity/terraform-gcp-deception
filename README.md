@@ -92,6 +92,7 @@ secretmanager.googleapis.com
 | `gcs_bucket` | `object` | `{}` | GCS bucket decoy config (see below) |
 | `secret` | `object` | `{}` | Secret Manager decoy config (see below) |
 | `lure_labels` | `map(string)` | `{env="prod", owner="legacy-team"}` | Believable operational labels on every decoy |
+| `audit_logging` | `object` | `{enabled=false}` | Opt-in Data Access audit logging for GCS + Secret Manager — see [Detection wiring](#detection-wiring-data-access-audit-logs) |
 
 ### `service_account` object
 
@@ -157,7 +158,18 @@ Decoy service accounts hold **zero project-level role bindings** — GCP's defau
 - `iam.serviceAccounts.implicitDelegation`
 - `iam.serviceAccounts.getOpenIdToken`
 
-for `principalSet://goog/public:all`. This means even project owners cannot impersonate the decoy SA, while untagged (real) SAs in the project are untouched. Any attempt generates a Cloud Audit Log entry. Verify the policy with `gcloud iam policies list --attachment-point=cloudresourcemanager.googleapis.com%2Fprojects%2FPROJECT_ID --kind=denypolicies` — project-level deny policies do **not** appear in `gcloud iam service-accounts get-iam-policy` output.
+for `principalSet://goog/public:all`. This means even project owners cannot impersonate the decoy SA, while untagged (real) SAs in the project are untouched. Impersonation attempts generate Cloud Audit Log entries. Verify the policy with `gcloud iam policies list --attachment-point=cloudresourcemanager.googleapis.com%2Fprojects%2FPROJECT_ID --kind=denypolicies` — project-level deny policies do **not** appear in `gcloud iam service-accounts get-iam-policy` output.
+
+## Detection wiring (Data Access audit logs)
+
+GCP only logs Admin Activity by default. **Reading a GCS object or accessing a secret version is a Data Access event, which is NOT logged unless Data Access audit logging is enabled** — without it, the GCS and Secret Manager decoys are silent: an attacker can read every decoy object and secret without a single log entry, and the attribution outputs have nothing to match against. (SA impersonation attempts are the exception — those log regardless.)
+
+Set `audit_logging = { enabled = true }` to have the module enable `DATA_READ` + `DATA_WRITE` audit logging for `storage.googleapis.com` and `secretmanager.googleapis.com` (each only when that decoy kind is deployed). Before enabling, know the tradeoffs:
+
+- The audit config is **authoritative per service** — it replaces any Data Access config the client already has for these two services in the project.
+- It applies **project-wide** (all buckets and secrets, not just decoys) — expect additional log volume and cost in busy projects.
+
+If the client or platform already manages Data Access logging (org policy, existing audit configs), leave this disabled — but confirm it covers both services, or the traps never fire.
 
 ## State handling
 
