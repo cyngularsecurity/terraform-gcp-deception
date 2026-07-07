@@ -22,7 +22,7 @@ Terraform module that plants **inert GCP decoy (honeytoken) resources** into a c
 ```hcl
 module "deception" {
   source  = "cyngularsecurity/deception/gcp"
-  version = "~> 1.0"
+  version = "~> 0.0" # pre-1.0 releases; CI tags v0.0.x (use "#minor"/"#major" in the merge commit to bump higher)
 
   project_id = "my-gcp-project"
   regions    = ["us-central1", "us-east1"]
@@ -102,9 +102,17 @@ secretmanager.googleapis.com
 | `name_prefix` | `string` | `""` | Prefix for `account_id` (3-27 chars, `[a-z][a-z0-9-]*`) |
 | `display_name` | `string` | `""` | Human-readable name (falls back to `name_prefix-NN`) |
 | `generate_key` | `bool` | `false` | Create a bait JSON key for each SA |
-| `iam_deny_policy` | `bool` | `false` | Attach an IAM Deny policy blocking the impersonation surface — see note below |
+| `iam_deny_policy` | `bool` | `false` | Attach a tag-scoped IAM Deny policy blocking the impersonation surface — see note below |
+| `deny_tag_key_id` | `string` | `""` | Existing org tag key (`tagKeys/NUMERIC_ID`); required when `iam_deny_policy = true` |
+| `deny_tag_value_id` | `string` | `""` | Existing org tag value (`tagValues/NUMERIC_ID`); required when `iam_deny_policy = true` |
 
-> **`iam_deny_policy` permission note:** Creating deny policies requires `iam.denypolicies.create`, which is part of `roles/iam.denyAdmin`. This role is **not** included in `roles/owner` and must be granted at the organization or folder level before setting this flag to `true`. Without it the module still plants inert SAs (no project-level role bindings means no usable permissions for non-owners), but project owners retain implicit `actAs` ability via their own role.
+> **`iam_deny_policy` mechanics & permissions:** IAM Deny policies attach at project scope, and their denial conditions only support resource-tag matching (`resource.matchTag`/`matchTagId`) — they cannot target a resource by name. The module therefore binds a caller-supplied org tag value to each decoy SA and scopes the single deny rule to that tag; without the tag scoping, the rule would block impersonation of **every** SA in the project. Requirements before setting the flag to `true`:
+>
+> - An existing org-level tag key/value (pass their numeric IDs). The tag's short names are visible on the SA — they must not contain the reserved words either.
+> - `roles/iam.denyAdmin` (for `iam.denypolicies.create`) — **not** included in `roles/owner`; grant at org or folder level.
+> - `roles/resourcemanager.tagUser` on the tag value (to bind it to the SAs).
+>
+> Without the flag the module still plants inert SAs (no project-level role bindings means no usable permissions for non-owners), but project owners retain implicit `actAs` ability via their own role.
 
 ### `gcs_bucket` object
 
@@ -140,7 +148,7 @@ secretmanager.googleapis.com
 
 ## Identity inertness
 
-Decoy service accounts hold **zero project-level role bindings** — GCP's default-deny means any non-owner principal that discovers the SA cannot use it. When `iam_deny_policy = true` (requires `roles/iam.denyAdmin` on the project/folder/org — see above), an IAM Deny policy is also attached that additionally blocks:
+Decoy service accounts hold **zero project-level role bindings** — GCP's default-deny means any non-owner principal that discovers the SA cannot use it. When `iam_deny_policy = true` (see the permission note above), each decoy SA is bound to the supplied org tag value and a project-level IAM Deny policy is attached whose single rule matches that tag (`resource.matchTagId`) and blocks:
 
 - `iam.serviceAccounts.actAs`
 - `iam.serviceAccounts.getAccessToken`
@@ -149,4 +157,15 @@ Decoy service accounts hold **zero project-level role bindings** — GCP's defau
 - `iam.serviceAccounts.implicitDelegation`
 - `iam.serviceAccounts.getOpenIdToken`
 
-for `principalSet://goog/public:all`. This means even project owners cannot impersonate the decoy SA. Any attempt generates a Cloud Audit Log entry.
+for `principalSet://goog/public:all`. This means even project owners cannot impersonate the decoy SA, while untagged (real) SAs in the project are untouched. Any attempt generates a Cloud Audit Log entry. Verify the policy with `gcloud iam policies list --attachment-point=cloudresourcemanager.googleapis.com%2Fprojects%2FPROJECT_ID --kind=denypolicies` — project-level deny policies do **not** appear in `gcloud iam service-accounts get-iam-policy` output.
+
+## State handling
+
+Terraform state for this module contains the bait SA private keys (when `generate_key = true`), every fake secret value, and a complete inventory of the decoys — anyone who reads the state can distinguish decoys from real infrastructure, which defeats the deception layer for that client. Treat state access like production-secret access:
+
+- Always use a remote, encrypted, access-controlled backend (e.g. a GCS backend with CMEK and versioning). Never keep local state for real deployments, and never apply from a checkout of this module repo.
+- `sensitive = true` on outputs only redacts CLI display; the values are stored in state in plaintext regardless.
+
+## Changing `regions`
+
+Secret Manager replication is immutable: adding or removing a region **destroys and recreates every decoy secret** (same `secret_id`, but version history and creation timestamps reset, and there is a brief window where the secret does not exist). GCS buckets in removed regions are destroyed. Plan region changes as a redeployment, not an in-place update.
