@@ -85,6 +85,18 @@ module "deception" {
   # ... same per-kind config as above
 }
 
+output "tracking_label" {
+  value = { for p, m in module.deception : p => m.tracking_label }
+}
+
+output "service_account_emails" {
+  value = { for p, m in module.deception : p => m.service_account_emails }
+}
+
+output "gcs_bucket_names" {
+  value = { for p, m in module.deception : p => m.gcs_bucket_names }
+}
+
 output "secret_ids" {
   value = { for p, m in module.deception : p => m.secret_ids }
 }
