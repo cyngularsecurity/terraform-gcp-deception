@@ -177,6 +177,8 @@ secretmanager.googleapis.com
 > - `roles/resourcemanager.tagUser` on the tag value (to bind it to the SAs).
 >
 > Without the flag the module still plants inert SAs (no project-level role bindings means no usable permissions for non-owners), but project owners retain implicit `actAs` ability via their own role.
+>
+> **Bait key without the deny policy:** a generated key is a real, working credential. With `iam_deny_policy = false` the decoy SA's only safeguard is having zero role bindings — a soft guarantee. If the SA ever gains a binding, the distributed key goes live. The module emits a plan-time **warning** (via a `check` block, hence the `>= 1.5` Terraform requirement) when `generate_key = true` and `iam_deny_policy = false`; treat `iam_deny_policy = true` as the intended production posture whenever bait keys are generated.
 
 ### `gcs_bucket` object
 

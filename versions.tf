@@ -1,5 +1,6 @@
 terraform {
-  required_version = ">= 1.0"
+  # >= 1.5 for check{} blocks (used for the bait-key-without-deny-policy warning).
+  required_version = ">= 1.5"
 
   required_providers {
     google = {
