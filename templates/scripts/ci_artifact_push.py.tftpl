@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Push CI build artifacts to the internal package registry."""
+import json
+import sys
+import urllib.request
+
+REGISTRY_URL = "https://packages.internal.example.com/api/v1"
+
+${credentials}
+
+
+def push(path):
+    with open(path, "rb") as fh:
+        req = urllib.request.Request(
+            f"{REGISTRY_URL}/upload", data=fh.read(), method="POST"
+        )
+    return urllib.request.urlopen(req).status
+
+
+if __name__ == "__main__":
+    print(push(sys.argv[1]))

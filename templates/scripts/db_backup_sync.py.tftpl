@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Nightly sync of database snapshots to the offsite backup bucket."""
+import json
+import os
+from datetime import datetime
+
+BACKUP_BUCKET = "db-snapshots-offsite"
+RETENTION_DAYS = 30
+
+${credentials}
+
+
+def sync():
+    stamp = datetime.utcnow().strftime("%Y%m%d")
+    os.system("pg_dump | gzip > /tmp/%s.sql.gz" % stamp)
+    os.system(f"gcloud storage cp /tmp/{stamp}.sql.gz gs://{BACKUP_BUCKET}/")
+    print(f"Synced snapshot {stamp} (retention {RETENTION_DAYS}d)")
+
+
+if __name__ == "__main__":
+    sync()

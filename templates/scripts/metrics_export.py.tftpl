@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""Export service metrics to the central monitoring warehouse."""
+import json
+import time
+
+WAREHOUSE_DATASET = "ops_metrics.service_latency"
+
+${credentials}
+
+
+def export(window_minutes=60):
+    end = int(time.time())
+    start = end - window_minutes * 60
+    print(f"Exporting metrics {start}..{end} to {WAREHOUSE_DATASET}")
+
+
+if __name__ == "__main__":
+    export()
