@@ -75,6 +75,7 @@ The module is single-project by design — the input/output schema is kept ident
 ```hcl
 variable "project_ids" {
   type = list(string)
+  default     = ["project-one", "project-two"]
 }
 
 module "deception" {
