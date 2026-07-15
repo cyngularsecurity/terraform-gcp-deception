@@ -19,6 +19,8 @@ Terraform module that plants **inert GCP decoy (honeytoken) resources** into a c
 
 ## Usage
 
+This example exercises every capability of the module. For a minimal quick start, drop the `iam_deny_policy`/`deny_tag_*` lines and the bait-key lines — the module then plants inert SAs, buckets, and secrets with no prerequisites beyond the [required APIs](#required-gcp-apis).
+
 ```hcl
 module "deception" {
   source  = "cyngularsecurity/deception/gcp"
@@ -30,17 +32,31 @@ module "deception" {
   tracking_label_key   = "managed-by"
   tracking_label_value = "platform"
 
+  # OPTIONAL — override the believable operational labels on every decoy.
+  lure_labels = {
+    env         = "prod"
+    owner       = "legacy-team"
+    cost-center = "infrastructure"
+  }
+
   # Decoy service accounts — inert identities (zero role bindings anywhere).
   service_account = {
-    enabled     = true
-    count       = 2
-    name_prefix = "admin-svc" # SA emails become admin-svc-01@..., admin-svc-02@...
+    enabled      = true
+    count        = 2
+    name_prefix  = "admin-svc"             # SA emails: admin-svc-01@..., admin-svc-02@...
+    display_name = "Admin Service Account" # OPTIONAL — falls back to name_prefix-NN
 
     # OPTIONAL bait credential: a real JSON key that authenticates but can do
     # nothing, planted in a dedicated Secret Manager secret per SA.
     generate_key           = true
     store_key_in_secret    = true
     key_secret_name_prefix = "app-runtime-config" # secrets: app-runtime-config-01, -02
+
+    # OPTIONAL hard impersonation block (recommended whenever generate_key = true).
+    # Requires a one-time org setup — see "Enabling the IAM Deny policy" below.
+    iam_deny_policy   = true
+    deny_tag_key_id   = "tagKeys/123456789"   # replace with your org tag key ID
+    deny_tag_value_id = "tagValues/987654321" # replace with your org tag value ID
   }
 
   # Decoy GCS buckets — discoverable in-project, unreachable from the internet.
@@ -50,6 +66,7 @@ module "deception" {
     name_prefix = "finance-exports" # bucket names: finance-exports-<hex>-01-<region>
     decoy_objects = [               # believable contents; reads are the tripwire
       { name = "reports/q4-summary.csv", content = "date,amount\n2024-01-15,142500\n" },
+      { name = "backups/service-credentials.json", content = "{\"type\":\"service_account\",\"project_id\":\"legacy-prod\"}" },
     ]
   }
 
@@ -58,6 +75,7 @@ module "deception" {
     enabled     = true
     count       = 2
     name_prefix = "legacy-api-key" # secret IDs: legacy-api-key-01, -02
+    # fake_value = "AKIA..."       # OPTIONAL — omit to auto-generate a random value
   }
 
   # Opt-in: Data Access audit logging for GCS + Secret Manager — without it (or
@@ -125,6 +143,22 @@ output "secret_ids" {
 ```
 
 Each instance is fully independent — its own resources and output maps, keyed by project ID at the root — and adding or removing a project never disturbs the other projects' state addresses. See [`examples/multi-project/`](examples/multi-project/) for a complete configuration.
+
+## Enabling the IAM Deny policy (optional)
+
+`iam_deny_policy = true` needs a one-time org setup, because deny-policy conditions can only match org tags. Create the tag once, grant two roles, then pass the numeric IDs to the module:
+
+```bash
+# 1. Create an org tag key/value (roles/resourcemanager.tagAdmin). Use ordinary
+#    governance names — they are visible on the SA and must not contain a reserved word.
+gcloud resource-manager tags keys create service-tier --parent=organizations/YOUR_ORG_ID
+gcloud resource-manager tags values create restricted --parent=tagKeys/123456789
+
+# 2. Grant the applying identity: roles/iam.denyAdmin (org/folder) and
+#    roles/resourcemanager.tagUser on the tag value.
+```
+
+Then set `iam_deny_policy = true`, `deny_tag_key_id`, and `deny_tag_value_id` as shown in [Usage](#usage). Leaving the flag `false` still plants inert SAs (zero role bindings) — it just skips the hard impersonation block.
 
 ## Required GCP APIs
 
