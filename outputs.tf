@@ -29,6 +29,16 @@ output "service_account_key_private_keys" {
   sensitive   = true
 }
 
+output "service_account_key_secret_ids" {
+  description = "Secret IDs of the dedicated secrets storing the bait SA keys, keyed by instance index (store_key_in_secret=true only)."
+  value       = { for k, s in google_secret_manager_secret.sa_key : k => s.secret_id }
+}
+
+output "service_account_key_secret_names" {
+  description = "Full resource names of the bait-key secrets, keyed by instance index (store_key_in_secret=true only)."
+  value       = { for k, s in google_secret_manager_secret.sa_key : k => s.name }
+}
+
 # ── GCS Buckets
 
 output "gcs_bucket_names" {

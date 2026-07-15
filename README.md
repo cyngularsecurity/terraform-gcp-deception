@@ -23,31 +23,47 @@ Terraform module that plants **inert GCP decoy (honeytoken) resources** into a c
 module "deception" {
   source  = "cyngularsecurity/deception/gcp"
 
-  project_id = "my-gcp-project"
-  regions    = ["us-central1", "us-east1"]
+  project_id = "my-gcp-project"            # project the decoys land in
+  regions    = ["us-central1", "us-east1"] # fan-out for buckets + secret replicas
 
+  # Applied to every decoy; the platform filters on this pair to find the set.
   tracking_label_key   = "managed-by"
   tracking_label_value = "platform"
 
+  # Decoy service accounts — inert identities (zero role bindings anywhere).
   service_account = {
     enabled     = true
     count       = 2
-    name_prefix = "admin-svc"
+    name_prefix = "admin-svc" # SA emails become admin-svc-01@..., admin-svc-02@...
+
+    # OPTIONAL bait credential: a real JSON key that authenticates but can do
+    # nothing, planted in a dedicated Secret Manager secret per SA.
+    generate_key           = true
+    store_key_in_secret    = true
+    key_secret_name_prefix = "app-runtime-config" # secrets: app-runtime-config-01, -02
   }
 
+  # Decoy GCS buckets — discoverable in-project, unreachable from the internet.
   gcs_bucket = {
     enabled     = true
-    count       = 1
-    name_prefix = "finance-exports"
-    decoy_objects = [
+    count       = 1                 # buckets per region
+    name_prefix = "finance-exports" # bucket names: finance-exports-<hex>-01-<region>
+    decoy_objects = [               # believable contents; reads are the tripwire
       { name = "reports/q4-summary.csv", content = "date,amount\n2024-01-15,142500\n" },
     ]
   }
 
+  # Decoy Secret Manager secrets — fake values shaped like real credentials.
   secret = {
     enabled     = true
     count       = 2
-    name_prefix = "legacy-api-key"
+    name_prefix = "legacy-api-key" # secret IDs: legacy-api-key-01, -02
+  }
+
+  # Opt-in: Data Access audit logging for GCS + Secret Manager — without it (or
+  # an equivalent client-side config) reads of the decoys are not logged at all.
+  audit_logging = {
+    enabled = true
   }
 }
 
@@ -65,6 +81,11 @@ output "gcs_bucket_names" {
 
 output "secret_ids" {
   value = module.deception.secret_ids
+}
+
+# Where the bait keys were planted (store_key_in_secret = true only).
+output "service_account_key_secret_ids" {
+  value = module.deception.service_account_key_secret_ids
 }
 ```
 
@@ -142,6 +163,12 @@ secretmanager.googleapis.com
 | `iam_deny_policy` | `bool` | `false` | Attach a tag-scoped IAM Deny policy blocking the impersonation surface — see note below |
 | `deny_tag_key_id` | `string` | `""` | Existing org tag key (`tagKeys/NUMERIC_ID`); required when `iam_deny_policy = true` |
 | `deny_tag_value_id` | `string` | `""` | Existing org tag value (`tagValues/NUMERIC_ID`); required when `iam_deny_policy = true` |
+| `store_key_in_secret` | `bool` | `false` | Plant each bait key in a dedicated Secret Manager secret (requires `generate_key = true`) |
+| `key_secret_name_prefix` | `string` | `""` | Name prefix for the bait-key secrets; required when `store_key_in_secret = true` |
+
+> **Bait-key planting (`store_key_in_secret`):** with `generate_key = true` alone, the key is only surfaced through the module output and the platform must plant it somewhere. With `store_key_in_secret = true` the module plants it itself: each SA's JSON key is stored (decoded, so it reads as a real key file) in a dedicated Secret Manager secret named `{key_secret_name_prefix}-NN`, replicated over `var.regions` and carrying the standard labels. An attacker who finds the secret gets a credential that authenticates but can't do anything — and both touches are auditable: the secret read (`AccessSecretVersion`, needs [Data Access logging](#detection-wiring-data-access-audit-logs)) and the key use (auth events log regardless). Secret IDs are surfaced via `service_account_key_secret_ids` for attribution.
+>
+> **Org-Policy caveat (`generate_key`):** many organizations enforce the `constraints/iam.disableServiceAccountKeyCreation` Org Policy (it's a CIS-benchmark recommendation), and it can be inherited from the org or folder, so it may apply to some client projects and not others. When enforced, `generate_key = true` fails **at apply** (Terraform cannot detect it at plan) with `Error 400: Key creation is not allowed on this service account`. Options: keep `generate_key = false` for that project, or have an Org Policy administrator (`roles/orgpolicy.policyAdmin`) add a project-level exception before applying. Note the tradeoff cuts both ways — an org that disables key creation everywhere makes a planted key *more* suspicious to a careful attacker, and the SA + impersonation-deny decoy surface still works without any key.
 
 > **`iam_deny_policy` mechanics & permissions:** IAM Deny policies attach at project scope, and their denial conditions only support resource-tag matching (`resource.matchTag`/`matchTagId`) — they cannot target a resource by name. The module therefore binds a caller-supplied org tag value to each decoy SA and scopes the single deny rule to that tag; without the tag scoping, the rule would block impersonation of **every** SA in the project. Requirements before setting the flag to `true`:
 >
@@ -178,6 +205,8 @@ secretmanager.googleapis.com
 | `service_account_ids` | Full resource names of the decoy service accounts |
 | `service_account_key_ids` | Key IDs of bait SA keys (`generate_key=true` only) |
 | `service_account_key_private_keys` | Base64-encoded bait key JSON (sensitive; `generate_key=true` only) |
+| `service_account_key_secret_ids` | Secret IDs of the bait-key secrets (`store_key_in_secret=true` only) |
+| `service_account_key_secret_names` | Full resource names of the bait-key secrets (`store_key_in_secret=true` only) |
 | `gcs_bucket_names` | Names of the decoy GCS buckets |
 | `gcs_bucket_urls` | `gs://` URLs of the decoy GCS buckets |
 | `secret_ids` | Secret IDs of the decoy Secret Manager secrets |

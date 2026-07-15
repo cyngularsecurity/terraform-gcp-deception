@@ -58,8 +58,26 @@ variable "service_account" {
     iam_deny_policy   = optional(bool, false)
     deny_tag_key_id   = optional(string, "") # tagKeys/NUMERIC_ID — existing org tag key; required when iam_deny_policy = true
     deny_tag_value_id = optional(string, "") # tagValues/NUMERIC_ID — existing org tag value; required when iam_deny_policy = true
+
+    # Plant each bait JSON key in a dedicated Secret Manager secret so the
+    # credential is discoverable in-environment (requires generate_key = true).
+    store_key_in_secret    = optional(bool, false)
+    key_secret_name_prefix = optional(string, "") # required when store_key_in_secret = true
   })
   default = {}
+
+  validation {
+    condition     = !var.service_account.store_key_in_secret || var.service_account.generate_key
+    error_message = "service_account.store_key_in_secret requires generate_key = true (there is no key to store otherwise)."
+  }
+  validation {
+    condition     = !var.service_account.store_key_in_secret || can(regex("^[a-zA-Z0-9_-]{1,252}$", var.service_account.key_secret_name_prefix))
+    error_message = "service_account.key_secret_name_prefix is required when store_key_in_secret = true and must contain only [a-zA-Z0-9_-], ≤252 chars."
+  }
+  validation {
+    condition     = !can(regex("(?i)(cyngular|deception|decoy|honeytoken|bait|trap|observer)", var.service_account.key_secret_name_prefix))
+    error_message = "service_account.key_secret_name_prefix must not contain reserved words: cyngular, deception, decoy, honeytoken, bait, trap, observer."
+  }
 
   # Deny-policy conditions only support resource.matchTag()/matchTagId() — resource
   # names are NOT valid deny conditions. Each decoy SA is bound to the supplied tag
