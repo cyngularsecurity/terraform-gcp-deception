@@ -22,7 +22,6 @@ Terraform module that plants **inert GCP decoy (honeytoken) resources** into a c
 ```hcl
 module "deception" {
   source  = "cyngularsecurity/deception/gcp"
-  version = "~> 0.0" # pre-1.0 releases; CI tags v0.0.x (use "#minor"/"#major" in the merge commit to bump higher)
 
   project_id = "my-gcp-project"
   regions    = ["us-central1", "us-east1"]
@@ -68,6 +67,30 @@ output "secret_ids" {
   value = module.deception.secret_ids
 }
 ```
+
+## Deploying to multiple projects
+
+The module is single-project by design — the input/output schema is kept identical across the AWS/Azure/GCP siblings, and internal fan-out over projects is impossible on the AWS side (providers cannot be looped), so multi-project deployment is the caller's `for_each`, one module instance per project:
+
+```hcl
+variable "project_ids" {
+  type = list(string)
+}
+
+module "deception" {
+  source   = "cyngularsecurity/deception/gcp"
+  for_each = toset(var.project_ids)
+
+  project_id = each.value
+  # ... same per-kind config as above
+}
+
+output "secret_ids" {
+  value = { for p, m in module.deception : p => m.secret_ids }
+}
+```
+
+Each instance is fully independent — its own resources and output maps, keyed by project ID at the root — and adding or removing a project never disturbs the other projects' state addresses. See [`examples/multi-project/`](examples/multi-project/) for a complete configuration.
 
 ## Required GCP APIs
 

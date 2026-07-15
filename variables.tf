@@ -1,6 +1,10 @@
 variable "project_id" {
-  description = "GCP project the decoys land in (client's choice)."
+  description = "GCP project the decoys land in (client's choice). Single project per module instance — for multiple projects, call the module with for_each (see examples/multi-project)."
   type        = string
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.project_id))
+    error_message = "project_id must be a valid GCP project ID: 6-30 chars, lowercase letters/digits/hyphens, starting with a letter and not ending with a hyphen."
+  }
 }
 
 variable "regions" {
