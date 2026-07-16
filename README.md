@@ -16,6 +16,18 @@ Terraform module that plants **inert GCP decoy (honeytoken) resources** into a c
 | Service Account | `google_service_account` + IAM Deny policy + optional JSON key | project-global |
 | GCS Bucket | `google_storage_bucket` + uniform BPA + decoy objects | one bucket per (count × region) |
 | Secret Manager Secret | `google_secret_manager_secret` + version | global metadata, per-region replicas |
+| Decoy DevOps scripts | `google_storage_bucket` + Python scripts with an embedded honeytoken | one bucket per region |
+
+## Required GCP APIs
+
+Enable these APIs in the target project before applying:
+
+```
+iam.googleapis.com
+iamcredentials.googleapis.com
+storage.googleapis.com
+secretmanager.googleapis.com
+```
 
 ## Usage
 
@@ -46,18 +58,29 @@ module "deception" {
     name_prefix  = "admin-svc"             # SA emails: admin-svc-01@..., admin-svc-02@...
     display_name = "Admin Service Account" # OPTIONAL — falls back to name_prefix-NN
 
-    # OPTIONAL bait credential: a real JSON key that authenticates but can do
+    # OPTIONAL - bait credential: a real JSON key that authenticates but can do
     # nothing, planted in a dedicated Secret Manager secret per SA.
     generate_key           = true
     store_key_in_secret    = true
     key_secret_name_prefix = "app-runtime-config" # secrets: app-runtime-config-01, -02
 
-    # OPTIONAL hard impersonation block (recommended whenever generate_key = true).
+    # OPTIONAL - hard impersonation block (recommended whenever generate_key = true).
     # Requires a one-time org setup — see "Enabling the IAM Deny policy" below.
     iam_deny_policy   = true
     deny_tag_key_id   = "tagKeys/123456789"   # replace with your org tag key ID
     deny_tag_value_id = "tagValues/987654321" # replace with your org tag value ID
   }
+
+  # OPTIONAL + REQUIRES DENY POLICY ABOVE 
+  # Decoy DevOps scripts — a "devops-scripts" bucket of realistic Python scripts,
+  # each with an embedded honeytoken. 
+  decoy_scripts = {
+    enabled      = true
+    name_prefix  = "devops-scripts"
+    script_count = 3            # random project-varied subset of the bundled templates
+    token_type   = "gcp_sa_key" # requires generate_key = true above
+  }
+
 
   # Decoy GCS buckets — discoverable in-project, unreachable from the internet.
   gcs_bucket = {
@@ -160,17 +183,6 @@ gcloud resource-manager tags values create restricted --parent=tagKeys/123456789
 
 Then set `iam_deny_policy = true`, `deny_tag_key_id`, and `deny_tag_value_id` as shown in [Usage](#usage). Leaving the flag `false` still plants inert SAs (zero role bindings) — it just skips the hard impersonation block.
 
-## Required GCP APIs
-
-Enable these APIs in the target project before applying:
-
-```
-iam.googleapis.com
-iamcredentials.googleapis.com
-storage.googleapis.com
-secretmanager.googleapis.com
-```
-
 ## Inputs
 
 | Name | Type | Default | Description |
@@ -182,6 +194,7 @@ secretmanager.googleapis.com
 | `service_account` | `object` | `{}` | Service Account decoy config (see below) |
 | `gcs_bucket` | `object` | `{}` | GCS bucket decoy config (see below) |
 | `secret` | `object` | `{}` | Secret Manager decoy config (see below) |
+| `decoy_scripts` | `object` | `{}` | Decoy DevOps-scripts bucket config (see below) |
 | `lure_labels` | `map(string)` | `{env="prod", owner="legacy-team"}` | Believable operational labels on every decoy |
 | `audit_logging` | `object` | `{enabled=false}` | Opt-in Data Access audit logging for GCS + Secret Manager — see [Detection wiring](#detection-wiring-data-access-audit-logs) |
 
@@ -232,6 +245,21 @@ secretmanager.googleapis.com
 | `name_prefix` | `string` | `""` | Prefix for `secret_id` (≤252 chars, `[a-zA-Z0-9_-]`) |
 | `fake_value` | `string` | `""` | Secret value to store (module generates a 40-char random string if empty) |
 
+### `decoy_scripts` object
+
+A bucket of realistic Python scripts (`deploy_release.py`, `db_backup_sync.py`, …), each carrying an embedded honeytoken. The module ships the script templates; a **deterministic, project-varied** subset is planted at randomized paths (`ci/`, `tools/`, `internal/jobs/`, …) — stable across applies (zero drift on re-run) but different per project.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `false` | Create the decoy-scripts bucket |
+| `name_prefix` | `string` | `"devops-scripts"` | Bucket name prefix (same rules as `gcs_bucket.name_prefix`) |
+| `script_count` | `number` | `3` | How many of the bundled templates to plant (1–20; capped at the number available) |
+| `token_type` | `string` | `"gitlab"` | Embedded credential: `gitlab` (fake `glpat-…`), `aws` (fake `AKIA…` + secret), or `gcp_sa_key` (the module's real bait SA key) |
+
+> **`token_type = gcp_sa_key`** embeds one of the module's actual bait SA keys (round-robined across the decoy SAs), so the honeytoken *authenticates* — the script read **and** the key use both trip detection — but the SA is inert. It requires `service_account.generate_key = true` and `count > 0` (enforced by a resource precondition at plan/apply).
+>
+> ⚠️ **Set `service_account.iam_deny_policy = true` when using `gcp_sa_key`.** Unlike a plain generated key, this writes the real key into GCS objects in **every regional scripts bucket** (plus state) — many readable copies. With the deny policy off, those copies are safe only because the SA has zero role bindings; if it ever gains one, a live key is scattered across many locations. The hard impersonation block removes that conditional risk. The module emits a plan-time **warning** when `gcp_sa_key` is used without the deny policy. Prefer `gitlab`/`aws` (fake per-instance tokens, no real credential distributed) when you can't attach the deny policy — detection then relies on the bucket-read Data Access log ([enable audit logging](#detection-wiring-data-access-audit-logs)).
+
 ## Outputs
 
 | Name | Description |
@@ -245,6 +273,8 @@ secretmanager.googleapis.com
 | `service_account_key_secret_names` | Full resource names of the bait-key secrets (`store_key_in_secret=true` only) |
 | `gcs_bucket_names` | Names of the decoy GCS buckets |
 | `gcs_bucket_urls` | `gs://` URLs of the decoy GCS buckets |
+| `decoy_scripts_bucket_names` | Names of the decoy-scripts buckets, keyed by region (`decoy_scripts.enabled` only) |
+| `decoy_scripts_object_paths` | Planted script object paths (`decoy_scripts.enabled` only) |
 | `secret_ids` | Secret IDs of the decoy Secret Manager secrets |
 | `secret_names` | Full resource names of the decoy secrets |
 
@@ -263,9 +293,9 @@ for `principalSet://goog/public:all`. This means even project owners cannot impe
 
 ## Detection wiring (Data Access audit logs)
 
-GCP only logs Admin Activity by default. **Reading a GCS object or accessing a secret version is a Data Access event, which is NOT logged unless Data Access audit logging is enabled** — without it, the GCS and Secret Manager decoys are silent: an attacker can read every decoy object and secret without a single log entry, and the attribution outputs have nothing to match against. (SA impersonation attempts are the exception — those log regardless.)
+GCP only logs Admin Activity by default. **Reading a GCS object or accessing a secret version is a Data Access event, which is NOT logged unless Data Access audit logging is enabled** — without it, the GCS, decoy-scripts, and Secret Manager decoys are silent: an attacker can read every decoy object, script, and secret without a single log entry, and the attribution outputs have nothing to match against. (SA impersonation attempts — and the *use* of a `gcp_sa_key` bait credential embedded in a script — are the exception: those log regardless.)
 
-Set `audit_logging = { enabled = true }` to have the module enable `DATA_READ` + `DATA_WRITE` audit logging for `storage.googleapis.com` and `secretmanager.googleapis.com` (each only when that decoy kind is deployed). Before enabling, know the tradeoffs:
+Set `audit_logging = { enabled = true }` to have the module enable `DATA_READ` + `DATA_WRITE` audit logging for `storage.googleapis.com` (when `gcs_bucket` **or** `decoy_scripts` is deployed) and `secretmanager.googleapis.com` (when `secret` is deployed). Before enabling, know the tradeoffs:
 
 - The audit config is **authoritative per service** — it replaces any Data Access config the client already has for these two services in the project.
 - It applies **project-wide** (all buckets and secrets, not just decoys) — expect additional log volume and cost in busy projects.
@@ -274,11 +304,11 @@ If the client or platform already manages Data Access logging (org policy, exist
 
 ## State handling
 
-Terraform state for this module contains the bait SA private keys (when `generate_key = true`), every fake secret value, and a complete inventory of the decoys — anyone who reads the state can distinguish decoys from real infrastructure, which defeats the deception layer for that client. Treat state access like production-secret access:
+Terraform state for this module contains the bait SA private keys (when `generate_key = true`), every fake secret value, the real key embedded in `gcp_sa_key` decoy scripts (which also lives in the GCS script objects themselves), and a complete inventory of the decoys — anyone who reads the state can distinguish decoys from real infrastructure, which defeats the deception layer for that client. Treat state access like production-secret access:
 
 - Always use a remote, encrypted, access-controlled backend (e.g. a GCS backend with CMEK and versioning). Never keep local state for real deployments, and never apply from a checkout of this module repo.
 - `sensitive = true` on outputs only redacts CLI display; the values are stored in state in plaintext regardless.
 
 ## Changing `regions`
 
-Secret Manager replication is immutable: adding or removing a region **destroys and recreates every decoy secret** (same `secret_id`, but version history and creation timestamps reset, and there is a brief window where the secret does not exist). GCS buckets in removed regions are destroyed. Plan region changes as a redeployment, not an in-place update.
+Secret Manager replication is immutable: adding or removing a region **destroys and recreates every decoy secret** (same `secret_id`, but version history and creation timestamps reset, and there is a brief window where the secret does not exist). GCS buckets and decoy-scripts buckets in removed regions are destroyed. Plan region changes as a redeployment, not an in-place update.

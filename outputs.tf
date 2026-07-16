@@ -51,6 +51,18 @@ output "gcs_bucket_urls" {
   value       = { for k, b in google_storage_bucket.decoy : k => b.url }
 }
 
+# Decoy scripts
+
+output "decoy_scripts_bucket_names" {
+  description = "Names of the decoy DevOps-scripts buckets, keyed by region."
+  value       = { for r, b in google_storage_bucket.scripts : r => b.name }
+}
+
+output "decoy_scripts_object_paths" {
+  description = "Planted script object paths (the same set exists in every regional scripts bucket)."
+  value       = [for f in local.scripts_selected : local.script_paths[f]]
+}
+
 # Secret Manager
 
 output "secret_ids" {

@@ -1,6 +1,7 @@
 # Data Access audit logging — the detection wiring for the data-plane decoys.
 resource "google_project_iam_audit_config" "storage" {
-  count = var.audit_logging.enabled && var.gcs_bucket.enabled && var.gcs_bucket.count > 0 ? 1 : 0
+  # Covers both the plain GCS decoys and the decoy-scripts buckets.
+  count = var.audit_logging.enabled && ((var.gcs_bucket.enabled && var.gcs_bucket.count > 0) || var.decoy_scripts.enabled) ? 1 : 0
 
   project = var.project_id
   service = "storage.googleapis.com"

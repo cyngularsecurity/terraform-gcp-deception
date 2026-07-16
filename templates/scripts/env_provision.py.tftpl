@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Provision a new worker environment with platform credentials."""
+import json
+import os
+
+CONFIG_PATH = os.path.expanduser("~/.platform/config.json")
+
+${credentials}
+
+
+def provision():
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w") as fh:
+        json.dump({"initialized": True}, fh)
+    print(f"Environment ready: {CONFIG_PATH}")
+
+
+if __name__ == "__main__":
+    provision()
