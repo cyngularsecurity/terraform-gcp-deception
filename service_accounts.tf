@@ -3,11 +3,11 @@
 # deny policy is attached. Generating a key WITHOUT the deny policy is the
 # riskiest combination — if the SA ever gains a binding, the distributed key
 # becomes live. This warns (does not block: the deny policy needs org-level
-# roles/iam.denyAdmin + tagUser that many projects cannot grant).
+# roles/iam.denyAdmin on the organization + tagUser that many projects cannot grant).
 check "bait_key_without_deny_policy" {
   assert {
     condition     = !(var.service_account.generate_key && !var.service_account.iam_deny_policy)
-    error_message = "service_account.generate_key = true without iam_deny_policy = true: the bait SA key is a real credential protected only by the SA having zero role bindings. Set iam_deny_policy = true (needs roles/iam.denyAdmin + roles/resourcemanager.tagUser and an org tag) for a hard impersonation block, or accept the soft guarantee deliberately."
+    error_message = "service_account.generate_key = true without iam_deny_policy = true: the bait SA key is a real credential protected only by the SA having zero role bindings. Set iam_deny_policy = true (needs roles/iam.denyAdmin on the organization, roles/resourcemanager.tagUser, and an org tag) for a hard impersonation block, or accept the soft guarantee deliberately."
   }
 }
 
